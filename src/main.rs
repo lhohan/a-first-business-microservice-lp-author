@@ -16,7 +16,7 @@ async fn handle_request(req: Request<Body>) -> Result<Response<Body>, anyhow::Er
 
         (&Method::POST, "/find_rate") => {
             let post_body = hyper::body::to_bytes(req.into_body()).await?;
-            let mut rate = "0.08".to_string(); // default is 8%
+            let mut maybe_rate: Option<String> = None;
 
             let rates_data: &[u8] = include_bytes!("rates_by_zipcode.csv");
             let mut rdr = Reader::from_reader(rates_data);
@@ -24,21 +24,27 @@ async fn handle_request(req: Request<Body>) -> Result<Response<Body>, anyhow::Er
                 let record = result?;
                 // dbg!("{:?}", record.clone());
                 if str::from_utf8(&post_body).unwrap().eq(&record[0]) {
-                    rate = record[1].to_string();
+                    maybe_rate = Some(record[1].to_string());
                     break;
                 }
             }
 
-            Ok(Response::new(Body::from(rate)))
+            match maybe_rate {
+                Some(rate) => Ok(Response::new(Body::from(rate))),
+                None => ok_notfound()
+            }
+
         }
 
         // Return the 404 Not Found for other routes.
-        _ => {
-            let mut not_found = Response::default();
-            *not_found.status_mut() = StatusCode::NOT_FOUND;
-            Ok(not_found)
-        }
+        _ => ok_notfound()
     }
+}
+
+fn ok_notfound<T>() -> Result<Response<Body>, T> {
+    let mut not_found = Response::default();
+    *not_found.status_mut() = StatusCode::NOT_FOUND;
+    Ok(not_found)
 }
 
 #[tokio::main(flavor = "current_thread")]
